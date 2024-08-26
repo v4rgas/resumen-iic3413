@@ -1,0 +1,345 @@
+Una transacción es una secuencia de una o más operaciones que modifican o consultan una base de datos. Cada transacción se compone de una secuencia de instrucciones y un estado. El estado incluye la posición actual en código y las variables temporales.
+
+Un ejemplo de como se diagrama una transacción es:
+\begin{center}
+  \begin{tabular}{ll|cc}
+    \textbf{$T_1$}          & \textbf{$T_2$}          & A    & B       \\\hline
+    \texttt{READ(A,x)}      &                         & 1000 & 1000    \\
+    \texttt{WRITE(A,x-100)} &                         & 900  &         \\
+                            & \texttt{READ(A,y)}      &      &         \\
+                            & \texttt{WRITE(A,y*1.1)} & 990  &         \\
+                            & \texttt{READ(B,y)}      &      &         \\
+                            & \texttt{WRITE(B,y*1.1)} &      & 1100    \\
+    \texttt{READ(B,x)}      &                         &      &         \\
+    \texttt{WRITE(B,x+100)} &                         & 990  & 1200    \\
+  \end{tabular}
+\end{center}
+
+\section{Propiedades ACID}
+Consiste en una serie de principios que definen lo que una transacción debería hacer. Esto ayudará un poco a entender el propósito que tienen.
+
+ACID es un acrónimo para \textit{``Atomicity''}, \textit{``Consistency''}, \textit{``Isolation''} y \textit{``Durability''}. Más especificamente\dots
+
+\begin{itemize}
+  \item \textbf{``Atomicity''}: Se ejecutan todos los pasos de la transacción, o no se ejecuta nada.
+  \item \textbf{``Consistency''}: Al terminar una transacción, los datos deben estar en un estado consistente.
+  \item \textbf{``Isolation''}: Cada transacción se ejecuta sin ser interferida por otras transacciones.
+  \item \textbf{``Durability''}: Si una transacción hace commit, sus cambios sobrevivirán a cualquier tipo de falla.
+\end{itemize}
+\pagebreak
+
+\subsection{¿Qué puede salir mal en una transacción?}
+\begin{enumerate}
+  \item Conflictos Write-Read (WR) - Lecturas sucias: Una transacción hace cambios a un dato, y antes de que la transacción termine, otra transacción está leyendo ese dato modificado y haciendo cosas con él. Esto no se debería permitir, ya que no mantiene el principio de Isolation.
+  \makeobservationbox{Ejemplo: Conflicto WR}{
+    \centering
+    \begin{tabular}{ll|cc}
+      \textbf{$T_1$}          & \textbf{$T_2$}          & A    & B       \\\hline
+      \texttt{READ(A,x)}      &                         & 1000 & 1000    \\
+      \texttt{WRITE(A,x-100)} &                         & 900  &         \\
+                              & \texttt{READ(A,y)}      &      &         \\
+                              & \texttt{WRITE(A,y*1.1)} & 990  &         \\
+                              & \texttt{READ(B,y)}      &      &         \\
+                              & \texttt{WRITE(B,y*1.1)} &      & 1100    \\
+      \texttt{READ(B,x)}      &                         &      &         \\
+      \texttt{WRITE(B,x+100)} &                         & 990  & 1200    \\
+    \end{tabular}
+    \label{example:conflictWR}
+    \begin{flushleft}
+      Aquí, $T_2$ empezó a trabajar con A antes de tiempo, alterando los resultados de los datos.
+    \end{flushleft}
+  }
+  \item Conflictos Read-Write (RW) - Lecturas irrepetibles: Una transacción hace lectura de un dato para generar cambios en este, pero antes de que comience a hacer cambios, otra transacción hace una lectura y un cambio del mismo dato.
+  \makeobservationbox{Ejemplo: Conflicto RW}{
+    \centering
+    \begin{tabular}{ll|c}
+      \textbf{$T_1$}          & \textbf{$T_2$}          & A    \\\hline
+      \texttt{READ(A,x)}      &                         & 1    \\
+      \texttt{IF(x>0)}        &                         &      \\
+                              & \texttt{READ(A,y)}      &      \\
+                              & \texttt{IF(y>0)}        &      \\
+                              & \texttt{  WRITE(B,y-1)} & 0    \\
+                              & \texttt{ENDIF}          &      \\
+      \texttt{  WRITE(B,x-1)} &                         & -1   \\
+      \texttt{ENDIF}          &                         & -1   \\
+    \end{tabular}
+    \label{example:conflictRW}
+  }
+  \item Conflictos Write-Write (WW) - Reescritura de datos temporales: Se rompe la secuencia correcta de escritura de datos, generando resultados inesperados.
+  \makeobservationbox{Ejemplo: Conflicto WW}{
+    \centering
+    \begin{tabular}{ll|cc}
+      \textbf{$T_1$}          & \textbf{$T_2$}             & A    & B       \\\hline
+      \texttt{WRITE(A,1000)}  &                            & 1000 &         \\
+                              & \texttt{WRITE(A,2000)}     & 2000 &         \\
+                              & \texttt{WRITE(B,2000)}     &      & 2000    \\
+      \texttt{WRITE(B,1000)}  &                            & 2000 & 1000    \\
+    \end{tabular}
+    \label{example:conflictWW}
+  }
+\end{enumerate}
+
+\subsubsection{Posibles soluciones}
+\begin{enumerate}
+  \item Datos erróneos $\rightarrow$ Restricciones de integridad, \textit{data cleaning}.
+  \item Fallas del almacenamiento (disco duro) $\rightarrow$ RAID, redundancia de datos.
+  \item Catástrofes $\rightarrow$ Copias distribuidas.
+  \item Fallas del sistema $\rightarrow$ \textit{Log manager}, \textit{Recovery manager}.
+\end{enumerate}
+
+\section{Elementos y Estados de una Base de Datos}
+Un elemento de una base de datos es un valor o conjunto de valores al que se puede acceder por medio de una transacción. La granularidad queda bajo el criterio del diseñador de la base de datos, y puede ser desde algo tan pequeño como el atributo de una tupla hasta algo tan grande como una relación. La granularidad correcta siempre va a depender del uso que se le dará a la base de datos.
+
+Por otro lado, el estado de una base de datos consiste en el valor de cada uno de sus elementos. De aquí surge el concepto de un estado consistente en la base de datos, que es cuando el estado cumple con las restricciones de integridad y otras restricciones implícitas.
+
+\makeobservationbox{Principio de Correctitud}{
+  ``Si una transacción comienza con una BD en estado consistente y se ejecuta en ausencia de otras transacciones o errores de sistema, entonces la BD estará en un estado consistente cuando la transacción termine.''
+}
+
+
+\section{Operaciones de una transacción}
+Las transacciones interactúan en tres espacios de memoria:
+\begin{itemize}
+  \item Almacenamiento no-volátil (disco duro, SSD)
+  \item Memoria RAM (Buffer Manager)
+  \item Variables locales (estado de una transacción)
+\end{itemize}
+
+Las operaciones primitivas de las transacciones son las siguientes
+
+\begin{itemize}
+  \item \texttt{PIN($X$)}: Solicitar $X$ al Buffer Manager.
+  \item \texttt{READ($X, t$)}: Leer $X$ y almacenarlo en la variable local $t$.
+  \item \texttt{WRITE($X, t$)}: Escribir el contenido de $t$ en $X$.
+  \item \texttt{UNPIN($X$)}: Soltar $X$ y sacarlo de la memoria.
+  \item \texttt{COMMIT}: Guardar los cambios realizados por la transacción
+  \item \texttt{ABORT}: Abortar la transacción y no llevar a cabo los cambios.
+\end{itemize}
+
+\section{Transaction Manager}
+Recordemos un poco lo que habíamos hablado de ACID. Una de las propiedades de las que habíamos hablado era \textit{``isolation''}.
+
+\makeobservationbox{Propiedad Isolation}{
+  Propiedad isolation asegura que, si bien las acciones de varias transacciones pueden ser intercaladas, el resultado final es idéntico a ejecutar todas las transacciones una después de la otra en algún orden secuencial.
+}
+
+Esta es la responsabilidad que tiene el Transaction Manager.
+
+\subsection{Schedule y concurrencia de transacciones}
+Un schedule $S$ es una secuencia de operaciones primitivas de una o más transacciones, tal que para toda transacción $T_i$, las acciones de $T_i$ aparecen en el mismo orden en $S$.
+
+Un schedule se dice que es serial si todas las acciones de una transacción se ejecutan en grupo, sin intercalar.
+
+Un schedule se dice que es serializable si existe un schedule $S'$ tal que el resultado de $S$ y $S'$ es el mismo dado un mismo estado inicial.
+
+\makeobservationbox{Ejemplos}{
+  Se tiene $T_1$ y $T_2$
+  \begin{center}
+    \begin{tabular}{ll}
+      \textbf{$T_1$}          & \textbf{$T_2$}          \\\hline
+      \texttt{READ(A,x)}      & \texttt{READ(A,y)}      \\
+      \texttt{x := x + 100}   & \texttt{y := y * 2}     \\
+      \texttt{WRITE(A,x)}     & \texttt{WRITE(A,y)}     \\
+      \texttt{READ(B,x)}      & \texttt{READ(B,y)}      \\
+      \texttt{x := x + 200}   & \texttt{y := y * 3}     \\
+      \texttt{WRITE(B,x)}     & \texttt{WRITE(B,y)}     \\
+    \end{tabular}
+  \end{center}
+  Entonces, un schedule serial sería
+  \begin{center}
+    \begin{tabular}{r|ll}
+      Paso  & \textbf{$T_1$}          & \textbf{$T_2$}          \\\hline
+      1     & \texttt{READ(A,x)}      &                         \\
+      2     & \texttt{x := x + 100}   &                         \\
+      3     & \texttt{WRITE(A,x)}     &                         \\
+      4     & \texttt{READ(B,x)}      &                         \\
+      5     & \texttt{x := x + 200}   &                         \\
+      6     & \texttt{WRITE(B,x)}     &                         \\
+      7     &                         & \texttt{READ(A,y)}      \\
+      8     &                         & \texttt{y := y * 2}     \\
+      9     &                         & \texttt{WRITE(A,y)}     \\
+      10    &                         & \texttt{READ(B,y)}      \\
+      11    &                         & \texttt{y := y * 3}     \\
+      12    &                         & \texttt{WRITE(B,y)}     \\
+    \end{tabular}
+  \end{center}
+  Un schedule serializable sería
+  \begin{center}
+    \begin{tabular}{r|ll}
+      Paso  & \textbf{$T_1$}          & \textbf{$T_2$}          \\\hline
+      1     & \texttt{READ(A,x)}      &                         \\
+      2     & \texttt{x := x + 100}   &                         \\
+      3     & \texttt{WRITE(A,x)}     &                         \\
+      4     &                         & \texttt{READ(A,y)}      \\
+      5     &                         & \texttt{y := y * 2}     \\
+      6     &                         & \texttt{WRITE(A,y)}     \\
+      7     & \texttt{READ(B,x)}      &                         \\
+      8     & \texttt{x := x + 200}   &                         \\
+      9     & \texttt{WRITE(B,x)}     &                         \\
+      10    &                         & \texttt{READ(B,y)}      \\
+      11    &                         & \texttt{y := y * 3}     \\
+      12    &                         & \texttt{WRITE(B,y)}     \\
+    \end{tabular}
+  \end{center}
+}
+
+
+\subsection{¿Es serializable?}
+Es muy dificil concluir si una transacción es o no es serializable. Para tratar de definir esto lo mejor posible, nos enfocaremos únicamente en los \texttt{READ} y \texttt{WRITE} que realizan las transacciones.
+
+\makeobservationbox{Leyenda}{
+  Para facilitar la lectura y escritura, se usará la siguiente notación:
+  \begin{itemize}
+    \item $T_i:\ \texttt{READ(X,t)} \rightarrow r_i(X)$
+    \item $T_i:\ \texttt{WRITE(X,t)} \rightarrow w_i(X)$
+  \end{itemize}
+  Así, podemos escribir el schedule serializable de antes de esta forma:
+  \[ S:\ r_1(A)\ w_1(A)\ r_2(A)\ w_2(A)\ r_1(B)\ w_1(B)\ r_2(B)\ w_2(B) \]
+}
+
+\subsection{Conflict Serializable}
+Dos acciones $t_1$ y $t_2$ son \textbf{NO} conflictivas si para toda secuencia de acciones $u$ y $v$, se tiene que
+\[ u\ t_1\ t_2\ v \quad \text{es equivalente a} \quad u\ t_2\ t_1\ v \]
+Cuando esto ocurre, se denota como
+\[ u\ t_1\ t_2\ v \vdash u\ t_2\ t_1\ v \]
+
+Para toda secuencia de acciones $u$ y $v$ se dice que $u \vdash^* v$ si $u \vdash v$ o si existe una secuencia de acciones $w$ tal que
+\[ u \vdash^* w \quad \text{y} \quad w \vdash^* v \]
+
+Con todo esto, llegamos a la definición de Conflict Serializable. Se dice que un schedule $S$ es conflict serializable si existe un schedule $S'$ tal que
+\[ S \vdash^* S' \]
+
+Si $S$ es conflict serializable, entonces $S$ también es serializable. Esto \textbf{NO} funciona al revés.
+
+\subsubsection{Grafo de Precedencia}
+Sea $S$ un schedule de transacciones $T_1, \ldots, T_n$. Para dos transacciones $T_i, T_j$ se dice que $T_i$ precede a $T_j$ en $S$ ($T_i <_S T_j$) si $S = u\ p_i(X)\ w\ q_j(Y)\ v$, donde $u$, $v$ y $w$ son secuencias de acciones de $S$ y $p_i(X)$ y $q_j(X)$ son acciones conflictivas.
+
+Esta relación $<_S$ define el grafo de precedencia. Así, se dice que un schedule es conflict serializable si y solo si el grafo de precedencia de $S$, $\mathcal{G}_S$, es acíclico.
+
+\section{Control de concurrencia basado en locks}
+Los locks consisten en un sistema en donde, en el momento que una transacción solicita acceso a algun elemento de la base de datos, este se bloquea, impidiendo que otras transacciones hagan cosas en ese elemento.
+
+% TODO: Revisar el overflow horizontal
+Para esto, es necesario implementar una interfaz que incluya \texttt{requestLock(element)} y \texttt{releaseLock(element)}.
+
+\subsection{Principios del uso de locks}
+\begin{itemize}
+  \item Consistencia: Las transacciones pueden leer o escribir un elemento solo si tienen su lock correspondiente. También, las transacciones deben hacer release del lock en algún momento (idealmente hacerlo apenas terminen de trabajar con el elemento en cuestión).
+  \item Validez: Solo una transacción puede tener el lock en cualquier momento.
+\end{itemize}
+
+\subsection{Two-Phase Locking (2PL)}
+Toda transacción pasa por dos fases:
+\begin{enumerate}
+  \item Lock phase: Los locks son pedidos a medida que se necesitan.
+  \item Release phase: Los locks son liberados si ya no se necesitan.
+\end{enumerate}
+
+\makeobservationbox{Teorema: 2PL}{
+  2PL produce únicamente conflict serializable schedules.
+}
+
+En el papel este sistema suena bastante bonito, pero en realidad tiene varios problemas\dots
+\begin{itemize}
+  \item Cascading Rollback: 2PL permite lecturas sucias. $\rightarrow$ Solución: Strict 2PL.
+  \item Interferencia entre \texttt{READ}s: Hay esperas innecesarias ocasionadas por lecturas. Una lectura no debería bloquear. $\rightarrow$ Solución: Lock modes.
+  \item Deadlocks: 2PL puede generar un schedule que no puede avanzar y se queda atascado indefinidamente. $\rightarrow$ Solución: Detección y prevención de deadlocks.
+\end{itemize}
+
+\subsubsection{Strict 2PL}
+Los locks no se sueltan si ya no se necesitan. Se sueltan solamente cuando la transacción hace \texttt{ABORT} o \texttt{COMMIT}. Esto es más sencillo de implementar y no requiere de cascading rollback.
+
+\subsubsection{Lock modes}
+Se pueden usar dos tipos de locks: Shared locks (slock, para leer), y exclusive locks (xlock, para escribir).
+
+\begin{center}
+  % Generated by Microsoft Copilot
+  \begin{tabular}{|c|c|c|}
+    \hline
+     & \multicolumn{2}{c|}{Lock solicitado} \\
+    \cline{2-3}
+    Locks Actuales & S & X \\
+    \hline
+    S & Si & No \\
+    \hline
+    X & No & No \\
+    \hline
+  \end{tabular}
+\end{center}
+
+\makeobservationbox{Teorema: Strict 2PL + Lock modes}{
+  2PL y Lock modes produce solamente conflict serializable schedules.
+}
+
+\subsubsection{Detección de Deadlocks}
+\begin{itemize}
+  \item Detección de ciclos en grafo de espera.
+  \item Timeout.
+  \item Prevención de deadlocks (timestamps): wait-die; wound-wait.
+\end{itemize}
+
+
+
+\section{Control de Concurrencia basado en Timestamps}
+Cada transacción $T$ recibe un timestamp TS($T$). Este puede ser asignado por un clock interno del sistema, o por medio de un contador. Así, toda transacción que inicia más tarde tiene un timestamp mayor.
+
+\subsection{Elementos de la Base de Datos}
+Para cada elemento de la base de datos se define
+\begin{itemize}
+  \item $RT(X)$ (Read-time de $X$): El timestamp mayor de todas las transacciones que han leído $X$.
+  \item $WT(X)$ (Write-time de $X$): El timestamp mayor de todas las transacciones que han escrito $X$.
+  \item $C(X)$ (Commit de $X$): 1 si y solo si la última transacción que escribió en $X$ hizo commit.
+\end{itemize}
+
+\subsection{Manejo de concurrencia}
+Cuando $T$ selecciona $r(x)$ o $w(x)$, el control de concurrencia debe tomar algunas decisiones
+\begin{itemize}
+  \item Otorgar el permiso de $X$ a $T$.
+  \item Rollback de $T$ (y empezar $T$ con un nuevo timestamp).
+  \item Retrasar $T$ hasta que $C(X) = 1$.
+\end{itemize}
+
+Se define el siguiente protocolo
+\begin{itemize}
+  \item $T$ desea leer $X$:
+  \begin{itemize}
+    \item Si $TS(T) \geq WT(X)$:
+    \begin{itemize}
+      \item Si $C(X) = 1$: Permitir la lectura de $X$.
+      \item Si $C(X) = 0$: Retrasar $T$ hasta que $C(X) = 1$.
+    \end{itemize}
+    \item Si $TS(T) < WT(X)$: Rollback de $T$.
+  \end{itemize}
+  \item $T$ desea escribir $X$:
+  \begin{itemize}
+    \item Si $TS(T) \geq RT(X)$ y $TS(T) \geq WT(X)$: Permitir la escritura de $X$ y actualizar $C(X) = 0$, $WT(X) := TS(T)$.
+    \item Si $TS(T) \geq RT(X)$ y $TS(T) < WT(X)$:
+    \begin{itemize}
+      \item Si $C(X) = 1$: Ignorar la escritura de $X$.
+      \item Si $C(X) = 0$: Retrasar $T$ hasta que $C(X) = 1$. 
+    \end{itemize}
+    \item Si $TS(T) \geq RT(X)$: Rollback de $T$.
+  \end{itemize}
+  \item $T$ desea hacer \texttt{COMMIT}:
+  \begin{itemize}
+    \item Buscar todos los elementos $X$ actualizados por $T$.
+    \item Actualizar $C(X) := 1$ para cada $X$ modificado.
+  \end{itemize}
+  \item $T$ desea hacer \texttt{ROLLBACK}:
+  \begin{itemize}
+    \item Buscar todas las transacciones $T'$ que están a la espera de $T$.
+    \item Otorgarles permiso.
+    \item Verificar si la acción de $T$ es válida para el schedule.
+  \end{itemize}
+\end{itemize}
+
+\subsection{Multiversion Timestamps}
+Consiste en mantener múltiples versiones de un mismo elemento, por medio de timestamps. Esto nos permitirá ahorrarnos algunos rollbacks.
+
+A esto también se le conoce como MVCC o Multiversion Concurrency Control.
+
+\section{Snapshot Isolation}
+Control de concurrencia optimista y multiversión. Aquí, cada transacción utiliza durante su ejecución, la última versión de los datos disponible al momento de iniciar.
+
+% TODO: Elaborar más tal vez (?)
+

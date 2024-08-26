@@ -1,0 +1,51 @@
+\documentclass{report}
+
+\usepackage{fullpage}
+\usepackage{subfiles}
+\usepackage[spanish]{babel}
+\usepackage{amsmath}
+\usepackage{mathbbol}
+\usepackage{tikz}
+\usepackage[ruled, vlined]{algorithm2e}
+\usepackage{graphicx}
+\usepackage{paracol}
+\usepackage{minted}
+\usepackage{hyperref}
+\usepackage{marvosym}
+
+\usetikzlibrary{shapes, positioning, decorations.pathreplacing, arrows.meta}
+
+
+\input{commands.tex}
+
+\title{IIC3413 - Implementación de Sistemas de Bases de Datos}
+\author{Andrés Cabezas}
+% \date{18 de junio de 2024}
+
+\begin{document}
+\maketitle
+
+\tableofcontents
+
+\chapter{Introducción a los Sistemas de Bases de Datos}
+\subfile{chapters/1-intro.tex}
+
+\chapter{Arquitectura de un Sistema de Bases de Datos Relacional}
+\subfile{chapters/2-arquitectura.tex}
+
+\chapter{Almacenamiento}
+\subfile{chapters/3-almacenamiento.tex}
+
+\chapter{Transacciones}
+\subfile{chapters/4-transacciones.tex}
+
+\chapter{Recuperaci\'on de fallas}
+\subfile{chapters/5-recovery.tex}
+
+\chapter{Anexo: Algoritmos}
+\subfile{chapters/6-algoritmos.tex}
+
+\chapter{Notas finales}
+\subfile{chapters/7-notas-finales.tex}
+
+\end{document}

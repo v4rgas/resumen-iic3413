@@ -1,0 +1,88 @@
+\section{Pol\'iticas Steal y Force para el Buffer Manager}
+\begin{itemize}
+  \item Steal frame: \textit{¿Puede un elemento $X$ en memoria ser escrito en el disco antes de que la transacción $T$ termine?}
+  \begin{itemize}
+    \item Steal: Se puede mover al disco tan pronto como sea posible.
+    \item No-Steal: No se puede mover al disco hasta que se haga \texttt{COMMIT}.
+  \end{itemize}
+  \item Force page: \textit{¿Es necesario que una transacción haga \texttt{FLUSH} de todos los elementos modificados inmediatamente antes o después de un \texttt{COMMIT}?}
+  \begin{itemize}
+    \item Force: Debe ser movido al disco antes de hacer \texttt{COMMIT}.
+    \item No-Force: Puede ser movido en cualquier momento, incluso después del \texttt{COMMIT}.
+  \end{itemize}
+\end{itemize}
+
+No-Steal + Force es f\'acil de recuperar, pero tiene el peor rendimiento. Por otro lado, Steal + No-Force no es tan fácil de recuperar, pero entrega mejor rendimiento. Este \'ultimo es el m\'as usado.
+
+\section{Log Manager}
+El Log Manager lleva un registro de todas las acciones de las transacciones. Todas las transacciones pueden escribir en el log de manera recurrente, y el log va llenando secuencialmente una p\'agina en el buffer. Luego, cuando esta p\'agina se llena, se almacena en el disco (secuencialmente también).
+
+Existen varios tipos de Log Manager, pero todos comparten en com\'un los siguientes tipos de entrada.
+\begin{itemize}
+  \item \texttt{< START $T$ >}
+  \item \texttt{< COMMIT $T$ >}
+  \item \texttt{< ABORT $T$ >}
+  \item \texttt{< $T$ \textit{update} >}
+\end{itemize}
+\pagebreak
+
+\subsection{Undo-Logging}
+Aquí, \texttt{< T \textit{update} >} $\rightarrow$ \texttt{<\ $T$, $X$, $t$ >}, donde $t$ es el valor antiguo de $X$.
+
+\subsubsection{Reglas}
+\begin{itemize}
+  \item Regla $U_1$: ``Si $T$ modifica $X$, el log record \texttt{<\ $T$, $X$, $t$ >} debe ser escrito en el disco antes de que $X$ sea escrito en el disco.''
+  \item Regla $U_2$: ``Si $T$ hace \texttt{COMMIT}, el log record \texttt{< COMMIT T >} debe ser escrito en el disco justo después que todos los datos modificados por $T$ sean guardados en el disco.''
+\end{itemize}
+
+\subsubsection{Procedimiento}
+Para recuperarse de una falla usando Undo-Logging, se debe leer el log desde el final hasta el inicio.
+\begin{itemize}
+  \item \texttt{< START $T$ >}: Ignorar
+  \item \texttt{< COMMIT $T$ >}: Marcar $T$ como realizada.
+  \item \texttt{< ABORT $T$ >}: Marcar $T$ como realizada.
+  \item \texttt{<\ $T$, $X$, $t$ >}: Restituir $X := t$ en el disco si $T$ no fue realizada.
+\end{itemize}
+
+\subsubsection{Checkpoints}
+Hacemos undo recovery, hasta que llegamos a un checkpoint. Una vez que se llega a un checkpoint, se asume que todo lo que est\'a antes est\'a en el disco, y que todo funcion\'o como corresponde, por lo que no es necesario seguir.
+
+
+\subsection{Redo-Logging}
+Aquí, \texttt{< T \textit{update} >} $\rightarrow$ \texttt{<\ $T$, $X$, $t$ >}, donde $t$ es el valor nuevo de $X$.
+
+\subsubsection{Reglas}
+\begin{itemize}
+  \item Regla $R_1$: ``Antes de modificar cualquier elemento $X$ en disco, es necesario que todos los logs records est\'en almacenados en disco, incluido el \texttt{< COMMIT $T$ >} log record.''
+\end{itemize}
+
+\subsubsection{Procedimiento}
+Para recuperarse de una falla usando Redo-Logging, se debe leer el log desde el inicio hasta el final.
+\begin{itemize}
+  \item Se identifican las transacciones que hicieron commit.
+  \item Se hace un scan desde el inicio.
+  \item Para cada log record \texttt{<\ $T$, $X$, $t$ >}, no se hace nada si $T$ no hizo \texttt{COMMIT}. Si $T$ logr\'o hacer \texttt{COMMIT}, se reescriben los cambios en el disco acorde al log.
+  \item Para cada transacción que qued\'o incompleta, se escribe \texttt{< ABORT $T$ >}.
+\end{itemize}
+
+\subsubsection{Checkpoints}
+Al usar checkpoints, se sabe que al leer \texttt{< END CKPT >}, se garantiza persistencia de las transacciones que hicieron \texttt{COMMIT}.
+
+
+\subsection{Undo/Redo-Logging}
+Aquí, \texttt{< T \textit{update} >} $\rightarrow$ \texttt{<\ $T$, $X$, $t_O$, $t_N$ >}, donde $t_O$ es el valor antiguo de $X$ y $t_N$ es el valor nuevo de $X$.
+
+\subsubsection{Reglas}
+\begin{itemize}
+  \item Regla $U_1$: ``Si $T$ modifica $X$, el log record \texttt{<\ $T$, $X$, $t$ >} debe ser escrito en el disco antes de que $X$ sea escrito en el disco.''
+  \item Regla $U_2$: ``Si $T$ hace \texttt{COMMIT}, el log record \texttt{< COMMIT T >} debe ser escrito en el disco justo después que todos los datos modificados por $T$ sean guardados en el disco.''
+  \item Regla $R_1$: ``Antes de modificar cualquier elemento $X$ en disco, es necesario que todos los logs records est\'en almacenados en disco, incluido el \texttt{< COMMIT $T$ >} log record.''
+  \item Regla $UR_1$: ``Antes de modificar cualquier elemento $X$ en disco, es necesario que el log record \texttt{<\ $T$, $X$, $t_O$, $t_N$ >} est\'e registrado en el log.''
+\end{itemize}
+
+
+\subsubsection{Procedimiento}
+Para recuperarse de una falla usando Undo/Redo-Logging, se debe hacer redo de todas las transacciones que hicieron commit, desde el principio hasta el final del log y tambi\'en se debe hacer undo de todas las transacciones que quedaron incompletas, desde el final hasta el principio del log.
+
+
+

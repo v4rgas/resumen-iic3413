@@ -1,0 +1,340 @@
+\section{Operadores Relacionales}
+Cada operador físico implementa un operador relacional lógico, y está orientado a desempeñar una tarea específica.
+
+Existen múltiples operadores físicos, como la selección ($\sigma$), la proyección ($\pi$), y sorting ($\tau$).
+
+\subsection{Sorting}
+Se considera que un conjunto de tuplas $\{ t_1, \ldots, t_n \}$ está ordenado respecto a una secuencia $(k_1, \ldots, k_m)$ si
+\[ t_i \leq_{k_1, \ldots, k_m} t_{i+1} \Rightarrow t_i(k_1) < t_{i+1}(k_1) \vee (t_i(k_1) = t_{i+1}(k_1) \wedge t_i \leq_{k_2, \ldots, k_m} t_{i+1}) \]
+
+Existen varios algoritmos para ordenar. Nos vamos a enfocar en MergeSort. MergeSort se basa en ordenar un par de listas que ya están ordenadas, para mezclarlas y dejarlas como una sola lista ordenada.
+
+\begin{paracol}{2}
+  \begin{algorithm}[h]
+    \caption{merge($L_1$, $L_2$)}
+    \KwIn{Dos listas ordenadas $L_1$ y $L_2$}
+    % \KwOut{Una lista ordenada $L$ con los elementos de $L_1$ y $L_2$}
+    \KwOut{Una lista ordenada $L$}
+    $L$ = lista vacía\;
+    \While{$L_1$ y $L_2$ son ambas no vacias}{
+      Quitar el menor elemento $m$ entre $L_1$ y $L_2$\;
+      Agregar $m$ al final de $L$
+    }
+    \uIf{$L_1$ está vacía}{
+      Remover elementos de $L_2$ y agregar al final de $L$.\;
+    }
+    \ElseIf{$L_2$ está vacía}{
+      Remover elementos de $L_1$ y agregar al final de $L$.\;
+    }
+    
+    \Return{$L$}
+  \end{algorithm}
+  
+  \switchcolumn
+  
+  \begin{algorithm}[h]
+    \caption{mergesort($L$)}
+    \KwIn{Una lista de numeros $L = a_1, \ldots, a_n$.}
+    \KwOut{$L$ en orden creciente.}
+    
+    \eIf{$n = 1$}{
+      \Return{$L$}
+    }{
+      $m = \lfloor n/2 \rfloor$\;
+      $L_1 = a_1, a_2, \ldots, a_m$\;
+      $L_2 = a_{m+1}, a_{m+2}, \ldots, a_n$\;
+      \Return{merge(mergesort($L_1$), mergesort($L_2$))}
+    }
+  \end{algorithm}
+\end{paracol}
+\pagebreak
+
+Existe una alternativa llamada External Merge Sort, la cual hace una tarea similar a Merge Sort, pero guardando los elementos del disco en un buffer de memoria, para en ese momento fusionar ambas listas y guardarlas al disco.
+
+\begin{algorithm}[h]
+  \caption{externalMergeSort($P$)}
+  \KwIn{Páginas $P = \{ p_1, \ldots, p_n \}$ con tuplas.}
+  \KwOut{Lista de páginas $P'$ con las tuplas ordenadas.}
+  \ForEach{$p \in P$}{
+    Leemos $p$ a memoria.\;
+    Ordenamos $p$ en $r$.\;
+    Escribimos $r$ en disco.
+  }
+  $R = \{ r_1, \ldots, r_n \}$
+  \While{$|R| > 1$}{
+    $R' = \emptyset$\;
+    \ForEach{$r_1, r_2 \in R$}{
+      Leemos $r_1$ y $r_2$ a memoria. ($R = R - \{r_1, r_2\}$)\;
+      Mergeamos $r_1$ y $r_2$ ($r = \text{merge}(r_1, r_2)$)\;
+      Escribimos $r$ en disco ($R' = R' \cup \{ r \}$)
+    }
+    $R = R'$
+  }
+  \Return{Único run en $R$}
+\end{algorithm}
+
+El costo I/O de este algoritmo, considerando $N$ el número de páginas del archivo, es de $2 \cdot N \cdot (1 + \lceil \log_2(N))$. Esto significa que un archivo de 8GB con 1.048.576 páginas tomará 1.2 horas en hacer sort. Esto es mucho.
+
+El algoritmo puede ser optimizado si es que se aumenta el número de runs en el merge, se reduce el número de runs iniciales y se evita escribir el último resultado. Con estas cosas el algoritmo queda así
+\pagebreak
+
+\begin{algorithm}[h]
+  \caption{externalMergeSort($P$) optimizado}
+  \KwIn{Páginas $P = \{ p_1, \ldots, p_n \}$ con tuplas y $B+1$ páginas en buffer.}
+  \KwOut{Lista de páginas $P'$ con las tuplas ordenadas.}
+  \While{$P \not= \emptyset$}{
+    Leemos $\{p_1, \ldots, p_{B+1}\}$ a memoria ($P = P - \{ p_1, \ldots, p_{B+1} \}$)\;
+    Ordenamos $\{p_1, \ldots, p_{B+1}\}$ con quicksort y creamos un run $r$\;
+    Escribimos $r$ en disco
+  }
+  $R = \{ r_1, \ldots, r_{\frac{n}{B+1}} \}$\;
+  \ForEach{$|R| > 1$}{
+    $R' = \emptyset$\;
+    \While{$R \not= \emptyset$}{
+      Leemos $r_1, \ldots, r_B$ a memoria ($R = R - \{ r_1, \ldots, r_B \}$)\;
+      Hacemos merge de $r_1, \ldots, r_B$ ($r = merge(r_1, \ldots, r_B)$)\;
+      Escribimos $r$ en disco ($R' = R' \cup \{ r \}$)
+    }
+    $R = R'$
+  }
+  \Return{Único run en $R$}
+\end{algorithm}
+
+Ahora su costo total en I/O es de $2 \cdot N \cdot (1 + \lceil \log_B(\lceil \frac{N}{B+1} \rceil) \rceil)$. Con eso, el mismo ejemplo de antes, y considerando un buffer de 2GB de RAM, es posible ordenar en tan solo 6.7 minutos.
+
+Como nota, los parámetros de costo de sorting son los siguientes
+\begin{itemize}
+  \item $\text{cost}(\tau(R)) = \text{cost}(R) + 2 \cdot \text{pages}(R)$
+  \item $\text{pages}(\tau(R)) = \text{pages}(R)$
+  \item $|\tau(R)| = |R|$
+  \item $\text{rsize}(\tau(R)) = \text{rsize}(R)$
+\end{itemize}
+\pagebreak
+
+\subsection{Selección}
+La selección es el proceso de elegir ciertos datos de una relación que calcen con un cierto criterio.
+
+La selección se puede dar en varios casos: sin índices, con índice primario, con índice secundario y con distintos filtros. Cada uno de estos casos genera pequeños cambios en el algoritmo, tal como se mostrará ahora.
+
+Para el caso sin índices, la única forma de filtrar es leer cada una de las tuplas, y retornarla si satisface el predicado.
+\begin{paracol}{2}
+  \begin{algorithm}
+    \caption{select($p$, $R$) no index}
+    \KwIn{Predicado $p$ y relación $R$}
+    \DontPrintSemicolon
+    \SetKwFunction{FOpen}{open}
+    \SetKwFunction{FClose}{close}
+    \SetKwFunction{FNext}{next}
+    \SetKwProg{Fn}{Function}{:}{}
+  
+    \Fn{\FOpen{}}{
+      $R$.open()
+    }
+    \Fn{\FClose{}}{
+      $R$.close()
+    }
+  
+    \Fn{\FNext{}}{
+      $t$ = $R$.next()\;
+      \While{$t \not= \texttt{NULL}$}{
+        \If{$p(t) = \texttt{true}$}{
+          \Return{$t$}
+        }
+        $t$ = $R$.next()
+      }
+      \Return{\texttt{NULL}}    
+    }
+  \end{algorithm}
+
+  \switchcolumn
+
+  Costo y parámetros de $\sigma_p(R)$
+  \begin{itemize}
+    \item $\text{cost}(\sigma_p(R)) = \text{cost}(R)$
+    \item $\text{pages}(\sigma_p(R)) = \text{sel}_p(R) \cdot \text{pages}(R)$
+    \item $|\sigma_p(R)| = \text{sel}_p(R) \cdot |R|$
+  \end{itemize}
+\end{paracol}
+
+
+Para el caso de índice primario, se busca la primera tupla que satisface $A = v$. Luego se retornan las siguientes tuplas haciendo next en el índice.
+\begin{paracol}{2}
+  \begin{algorithm}
+    \caption{select($p$, $R$) primary index}
+    \KwIn{Predicado $p := A=v$, relación $R$ e índice $I$}
+    \DontPrintSemicolon
+    \SetKwFunction{FOpen}{open}
+    \SetKwFunction{FClose}{close}
+    \SetKwFunction{FNext}{next}
+    \SetKwProg{Fn}{Function}{:}{}
+  
+    \Fn{\FOpen{}}{
+      $I$.open()\;
+      $I$.search($A=v$)
+    }
+    \Fn{\FClose{}}{
+      $I$.close()
+    }
+  
+    \Fn{\FNext{}}{
+      $t$ = $I$.next()\;
+      \If{$t \not= \texttt{NULL}$}{
+        \Return{$t$}
+      }
+      \Return{\texttt{NULL}}    
+    }
+  \end{algorithm}
+
+  \switchcolumn
+
+  Costo y parámetros de $\sigma_p(R)$
+  \begin{itemize}
+    \item $\text{cost}(\sigma_p(R)) = \text{cost}(I) + \text{sel}_p(R) \cdot \text{pages}(R)$
+    \item $\text{pages}(\sigma_p(R)) = \text{sel}_p(R) \cdot \text{pages}(R)$
+    \item $|\sigma_p(R)| = \text{sel}_p(R) \cdot |R|$
+  \end{itemize}
+\end{paracol}
+\pagebreak
+
+Para el caso de índice secundario, se busca la primera tupla que satisface $A = v$. Luego, por cada data entry $k*$ que satisface $A = v$, se busca la pagina en $k*.\text{RID}$. Finalmente, se retorna la tupla con RID igual a $k*.\text{RID}$.
+\begin{paracol}{2}
+  \begin{algorithm}
+    \caption{select($p$, $R$) secondary index}
+    \KwIn{Predicado $p := A=v$, relación $R$ e índice $I$}
+    \DontPrintSemicolon
+    \SetKwFunction{FOpen}{open}
+    \SetKwFunction{FClose}{close}
+    \SetKwFunction{FNext}{next}
+    \SetKwProg{Fn}{Function}{:}{}
+  
+    \Fn{\FOpen{}}{
+      $I$.open()\;
+      $I$.search($A=v$)
+    }
+    \Fn{\FClose{}}{
+      $I$.close()
+    }
+  
+    \Fn{\FNext{}}{
+      $k*$ = $I$.next()\;
+      \If{$k* \not= \texttt{NULL}$}{
+        \Return{$R.\text{get}(k*.\text{RID})$}
+      }
+      \Return{\texttt{NULL}}    
+    }
+  \end{algorithm}
+
+  \switchcolumn
+
+  Costo y parámetros de $\sigma_p(R)$
+  \begin{itemize}
+    \item $\text{cost}(\sigma_p(R)) = \text{cost}(I) + \text{sel}_p(R) \cdot |R|$
+    \item $\text{pages}(\sigma_p(R)) = \text{sel}_p(R) \cdot \text{pages}(R)$
+    \item $|\sigma_p(R)| = \text{sel}_p(R) \cdot |R|$
+  \end{itemize}
+\end{paracol}
+
+
+\subsection{Proyección}
+La proyección tiene como fin mostrar cierta columna $L$ de una relación $R$.
+\begin{paracol}{2}
+  \begin{algorithm}
+    \caption{project($p$, $R$)}
+    \KwIn{Predicado $p := A=v$, relación $R$ e índice $I$}
+    \DontPrintSemicolon
+    \SetKwFunction{FOpen}{open}
+    \SetKwFunction{FClose}{close}
+    \SetKwFunction{FNext}{next}
+    \SetKwProg{Fn}{Function}{:}{}
+  
+    \Fn{\FOpen{}}{
+      $I$.open()\;
+      $I$.search($A=v$)
+    }
+    \Fn{\FClose{}}{
+      $I$.close()
+    }
+  
+    \Fn{\FNext{}}{
+      $t$ = $R$.next()\;
+      \If{$t \not= \texttt{NULL}$}{
+        \Return{$t$.project($L$)}
+      }
+      \Return{\texttt{NULL}}    
+    }
+  \end{algorithm}
+
+  \switchcolumn
+
+  Costo y parámetros de $\pi_L(R)$
+  \begin{itemize}
+    \item $\text{cost}(\pi_L(R)) = \text{cost}(R)$
+    \item $\text{pages}(\pi_L(R)) = \frac{\text{rsize}(\pi_L(R))}{\text{rsize}(R)} \cdot \text{pages}(R)$
+    \item $|\pi_L(R)| = |R|$
+    \item $\text{rsize}(\pi_L(R)) = \sum_{\text{att} \in L} \mathbb{E}(|\pi_{\text{att}}(R)|)$
+  \end{itemize}
+\end{paracol}
+
+\pagebreak
+
+\subsection{Join}
+Nested loops join
+\begin{paracol}{2}
+  \begin{algorithm}
+    \caption{join($R$, $S$)}
+    \KwIn{Predicado $p$, operadores $R$ y $S$}
+    \DontPrintSemicolon
+    \SetKwFunction{FOpen}{open}
+    \SetKwFunction{FClose}{close}
+    \SetKwFunction{FNext}{next}
+    \SetKwProg{Fn}{Function}{:}{}
+  
+    \Fn{\FOpen{}}{
+      $R$.open()\;
+      $S$.open()\;
+      $r$ = $R$.next()
+    }
+    \Fn{\FClose{}}{
+      $R$.close()\;
+      $S$.close()
+    }
+  
+    \Fn{\FNext{}}{
+      \While{$r \not= \texttt{NULL}$}{
+        $s$ = $S$.next()\;
+        \If{$s = \texttt{NULL}$}{
+          $S$.close()\;
+          $r$ = $R$.next()\;
+          $S$.open()
+        }
+        \ElseIf{$(r,s)$ satisfacen $p$}{
+          \Return{$(r,s)$}
+        }
+      }
+      \Return{\texttt{NULL}}   
+    }
+  \end{algorithm}
+
+  \switchcolumn
+
+  Costo y parámetros de $R \bowtie_p S$
+  \begin{itemize}
+    \item $\text{cost}(R \bowtie_p S) = \text{cost}(R) + |R| \cdot \text{cost}(S)$
+    \item $\text{pages}(R \bowtie_p S) = \text{sel}_p(R \times S) \cdot \text{pages}(R) \cdot \text{pages}(S)$
+    \item $|R \bowtie_p S| = \text{sel}_p(R \times S) \cdot |R| \cdot |S|$
+    \item $\text{rsize}(R \bowtie_p S) = \text{rsize}(R) + \text{rsize}(S)$
+  \end{itemize}
+\end{paracol}
+
+\section{Estimación de Costos}
+Para estimar que tan computacionalmente costosa puede llegar a ser una operación, se tienden a usar los siguientes parámetros
+\begin{itemize}
+  \item cost($R$): Costo en I/O para computar $R$\footnote{$R$: Relación que está participando en la operación.}
+  \item pages($R$): Cantidad de páginas necesarias para almacenar $R$.
+  \item $|R|$: Cantidad de tuplas en $R$.
+  \item rsize($R$): Tamaño de una tupla en promedio en $R$.
+  \item distinct($R$): Cantidad de elementos distintos en $R$.
+  \item $\text{distinct}_a(R)$: Cantidad de elementos distintos en $R$, según la columna $a$.
+  \item $|\text{page}|$: Tamaño de una página.
+  \item $\text{sel}_p(R)$: Fracción de tuplas en $R$ que satisfacen $p$.\footnote{Se habla de alta selectividad cuando pocos elementos de $R$ satisfacen a $p$, osea, cuando $\text{sel}_p(R) \sim 0$}
+\end{itemize}
